@@ -1,12 +1,13 @@
 use peroxide::fuga::*;
+use peroxide::fuga::anyhow::Result;
 use rugfield::{grf, Kernel};
 use rayon::prelude::*;
-use candle_core::{scalar::TensorScalar, DType, Device, Module, Result, Tensor};
+use candle_core::{Device, Module, Tensor, DType};
 use candle_nn::{Linear, VarBuilder, linear, VarMap, Optimizer, loss};
 use candle_optimisers::adam::{Adam, ParamsAdam};
 use indicatif::{ProgressBar, ProgressStyle, ParallelProgressIterator};
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     let dev = Device::cuda_if_available(0)?;
     println!("Device: {:?}", dev);
 
@@ -17,8 +18,8 @@ fn main() -> anyhow::Result<()> {
 
     // Plot data
     let u_train = &ds.train_u.detach().to_vec2()?;
-    let y_train = &ds.train_y.detach().to_vec2()?;
-    let gu_train = &ds.train_Gu.detach().to_vec2()?;
+    let y_train = &ds.train_y[0].to_vec1()?;
+    let gu_train = &ds.train_Gu[0].to_vec1()?;
     
     let x_train = linspace(0, 1, 100);
 
@@ -36,8 +37,8 @@ fn main() -> anyhow::Result<()> {
 
     let mut plt = Plot2D::new();
     plt
-        .set_domain(y_train[0].clone())
-        .insert_image(gu_train[0].clone())
+        .set_domain(y_train.clone())
+        .insert_image(gu_train.clone())
         .set_xlabel(r"$t$")
         .set_ylabel(r"$x(t)$")
         .set_style(PlotStyle::Nature)
@@ -50,12 +51,69 @@ fn main() -> anyhow::Result<()> {
 }
 
 // ┌─────────────────────────────────────────────────────────┐
+//  Train
+// └─────────────────────────────────────────────────────────┘
+#[allow(non_snake_case)]
+pub fn train(ds: Dataset, dev: &Device, rng: &mut SmallRng) -> Result<DeepONet> {
+    let (train_u, train_y, train_Gu) = ds.train_set(dev)?;
+    let (val_u, val_y, val_Gu) = ds.val_set(dev)?;
+
+    let hparam = HyperParams {
+        x_sensors: 100,
+        y_sensors: 100,
+        p: 10,
+        hidden_size: 40,
+        hidden_depth: 3,
+        learning_rate: 1e-3,
+        batch_size: 256,
+        epoch: 200
+    };
+
+    let varmap = VarMap::new();
+    let vb = VarBuilder::from_varmap(&varmap, DType::F32, dev);
+
+    let model = DeepONet::new(vb, hparam)?;
+
+    let adam_param = ParamsAdam {
+        lr: hparam.learning_rate,
+        ..Default::default()
+    };
+    let mut adam = Adam::new(varmap.all_vars(), adam_param)?;
+
+    let mut train_loss = vec![0f32; hparam.epoch];
+    let mut val_loss = vec![0f32; hparam.epoch];
+
+    let train_batch = train_u.dims()[0] / hparam.batch_size;
+    
+    let pb = ProgressBar::new(hparam.epoch as u64);
+    pb.set_style(ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta}) {msg}")
+        .unwrap()
+        .progress_chars("##-"));
+
+    for epoch in 0 .. hparam.epoch {
+        pb.set_position(epoch as u64);
+        //TODO
+        //let msg = format!("epoch: {}, train_loss: {:.4e}, val_loss: {:.4e}", epoch, train_loss[], val_loss);
+        pb.set_message(msg);
+
+        let mut ics = (0u32 .. train_u.dims()[0] as u32).collect::<Vec<_>>();
+        ics.shuffle(rng);
+
+        let mut epoch_loss = 0f32;
+        for i in 0 .. 
+    }
+
+    todo!()
+}
+
+// ┌─────────────────────────────────────────────────────────┐
 //  Neural Network
 // └─────────────────────────────────────────────────────────┘
 pub struct DeepONet {
     branch_net: Vec<Linear>,
     trunk_net: Vec<Linear>,
-    bias: Tensor,
+    bias: Vec<Tensor>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -71,26 +129,29 @@ pub struct HyperParams {
 }
 
 impl DeepONet {
-    pub fn new(vs: VarBuilder, hparam: HyperParams) -> anyhow::Result<Self> {
+    pub fn new(vb: VarBuilder, hparam: HyperParams) -> Result<Self> {
         let m = hparam.x_sensors;
         let l = hparam.y_sensors;
         let p = hparam.p;
         let hidden_size = hparam.hidden_size;
         let hidden_depth = hparam.hidden_depth;
 
-        let mut branch_net = vec![linear(m, hidden_size, vs.pp("branch_first"))?];
+        let mut branch_net = vec![linear(m, hidden_size, vb.pp("branch_first"))?];
         for i in 1 .. hidden_depth {
-            branch_net.push(linear(hidden_size, hidden_size, vs.pp(&format!("branch{}", i)))?);
+            branch_net.push(linear(hidden_size, hidden_size, vb.pp(&format!("branch{}", i)))?);
         }
-        branch_net.push(linear(hidden_size, p, vs.pp("branch_last"))?);
+        branch_net.push(linear(hidden_size, p, vb.pp("branch_last"))?);
 
-        let mut trunk_net = vec![linear(1, hidden_size, vs.pp("trunk_first"))?];
+        let mut trunk_net = vec![linear(1, hidden_size, vb.pp("trunk_first"))?];
         for i in 1 .. hidden_depth {
-            trunk_net.push(linear(hidden_size, hidden_size, vs.pp(&format!("trunk{}", i)))?);
+            trunk_net.push(linear(hidden_size, hidden_size, vb.pp(&format!("trunk{}", i)))?);
         }
-        trunk_net.push(linear(hidden_size, p, vs.pp("trunk_last"))?);
+        trunk_net.push(linear(hidden_size, p, vb.pp("trunk_last"))?);
 
-        let bias = Tensor::zeros(&[l, 1], DType::F32, vs.device())?;
+        let mut bias = vec![];
+        for i in 0 .. l {
+            bias.push(vb.get(1, &format!("bias{}", i))?);
+        }
 
         Ok(Self {
             branch_net,
@@ -99,9 +160,9 @@ impl DeepONet {
         })
     }
 
-    pub fn forward(&self, u: &Tensor, y_vec: &Vec<Tensor>) -> anyhow::Result<Tensor> {
+    pub fn forward(&self, u: &Tensor, y_vec: &[Tensor]) -> Result<Vec<Tensor>> {
         let mut u = u.clone();
-        let mut y_vec = y_vec.clone();
+        let mut y_vec = y_vec.to_vec();
         let n = self.branch_net.len();
         for (branch, trunk) in self.branch_net.iter().take(n-1).zip(self.trunk_net.iter()) {
             u = branch.forward(&u)?;
@@ -111,17 +172,13 @@ impl DeepONet {
                 *y = y.gelu()?;
             }
         }
-        u = self.branch_net.last().unwrap().forward(&u)?;
-        for y in y_vec.iter_mut() {
-            *y = self.trunk_net.last().unwrap().forward(y)?;
+        u = self.branch_net.last().unwrap().forward(&u)?;       // u: B x p
+        for (y, bias) in y_vec.iter_mut().zip(self.bias.iter()) {
+            *y = self.trunk_net.last().unwrap().forward(y)?;    // y: B x p
+            *y = y.mul(&u)?.sum(1)?.broadcast_add(bias)?;       // y: B
         }
-        // u : B x p
-        // y : [B x p; l]
-        
-        
-        //let mut s = Tensor::zeros(&[y_vec[0].size()[0], 1], DType::F32, y_vec[0].device())?;
 
-        todo!()
+        Ok(y_vec)
     }
 }
 
@@ -174,7 +231,6 @@ impl Dataset {
             .progress_with(ProgressBar::new(n as u64))
             .map(|grf| solve_grf_ode(grf).unwrap())
             .unzip();
-        let l = y_vec[0].len();
 
         let x_vec = linspace(0, 1, m);
         let u_vec = grf_scaled_vec.par_iter()
@@ -182,12 +238,16 @@ impl Dataset {
             .collect::<Vec<_>>();
 
         let train_u = u_vec.iter().take(n_train).flatten().cloned().collect::<Vec<_>>();
-        let train_y = y_vec.iter().take(n_train).map(|y| Tensor::from_vec(y.clone(), &[n_train, 1], device).unwrap()).collect::<Vec<_>>();
-        let train_Gu = Gu_vec.iter().take(n_train).map(|Gu| Tensor::from_vec(Gu.clone(), &[n_train, 1], device).unwrap()).collect::<Vec<_>>();
+        let train_y = y_vec.iter().take(n_train).cloned().collect::<Vec<_>>();
+        let train_y = vec_to_tensor(train_y, device)?;
+        let train_Gu = Gu_vec.iter().take(n_train).cloned().collect::<Vec<_>>();
+        let train_Gu = vec_to_tensor(train_Gu, device)?;
 
         let val_u = u_vec.iter().skip(n_train).flatten().cloned().collect::<Vec<_>>();
-        let val_y = y_vec.iter().skip(n_train).map(|y| Tensor::from_vec(y.clone(), &[n_val, 1], device).unwrap()).collect::<Vec<_>>();
-        let val_Gu = Gu_vec.iter().skip(n_train).map(|Gu| Tensor::from_vec(Gu.clone(), &[n_val, 1], device).unwrap()).collect::<Vec<_>>();
+        let val_y = y_vec.iter().skip(n_train).cloned().collect::<Vec<_>>();
+        let val_y = vec_to_tensor(val_y, device)?;
+        let val_Gu = Gu_vec.iter().skip(n_train).cloned().collect::<Vec<_>>();
+        let val_Gu = vec_to_tensor(val_Gu, device)?;
 
         Ok(Self {
             train_u: Tensor::from_vec(train_u, &[n_train, m], device)?,
@@ -252,4 +312,20 @@ pub fn solve_grf_ode(grf: &[f64]) -> anyhow::Result<(Vec<f64>, Vec<f64>)> {
     let (t_vec, xp_vec) = solver.solve(&grf_ode, (0f64, 10f64), 1e-3)?;
     let (x_vec, _): (Vec<f64>, Vec<f64>) = xp_vec.into_iter().map(|xp| (xp[0], xp[1])).unzip();
     Ok((t_vec, x_vec))
+}
+
+// ┌─────────────────────────────────────────────────────────┐
+//  Utils
+// └─────────────────────────────────────────────────────────┘
+pub fn vec_to_tensor(vec: Vec<Vec<f64>>, dev: &Device) -> Result<Vec<Tensor>> {
+    let mat = py_matrix(vec);
+    let mut tensors = vec![];
+    for i in 0 .. mat.col {
+        tensors.push(Tensor::from_vec(mat.col(i), &[mat.row, 1], dev)?);
+    }
+    Ok(tensors)
+}
+
+pub fn batch_slicing(vec: &[Tensor], ics: &Tensor) -> Result<Vec<Tensor>> {
+    Ok(vec.iter().map(|v| v.index_select(ics, 0)).collect::<std::result::Result<Vec<_>, _>>()?)
 }
