@@ -8,7 +8,7 @@ use candle_optimisers::adam::{Adam, ParamsAdam};
 use indicatif::{ProgressBar, ProgressStyle, ParallelProgressIterator};
 
 #[allow(non_snake_case)]
-fn main() -> Result<()> {
+fn main() -> std::result::Result<(), Box<dyn Error>> {
     let dev = Device::cuda_if_available(0)?;
     println!("Device: {:?}", dev);
 
@@ -18,6 +18,7 @@ fn main() -> Result<()> {
     let n_val = 2000usize;
 
     let ds = Dataset::generate(n_train, n_val, &dev)?;
+    ds.write_parquet()?;
 
     // Plot data
     //let u_train = &ds.train_u.detach().to_vec2()?;
@@ -64,98 +65,98 @@ fn main() -> Result<()> {
     //    .set_path("x.png")
     //    .savefig()?;
 
-    let (model, train_history, val_history) = train(ds, &dev, &mut rng)?;
+    // let (model, train_history, val_history) = train(ds, &dev, &mut rng)?;
 
-    let epochs = linspace(1, train_history.len() as f64, train_history.len());
+    // let epochs = linspace(1, train_history.len() as f64, train_history.len());
 
-    let mut plt = Plot2D::new();
-    plt
-        .set_domain(epochs.clone())
-        .insert_image(train_history.clone())
-        .set_xlabel(r"Epoch")
-        .set_ylabel(r"Train loss")
-        .set_yscale(PlotScale::Log)
-        .set_style(PlotStyle::Nature)
-        .tight_layout()
-        .set_dpi(600)
-        .set_path("train_loss.png")
-        .savefig()?;
+    // let mut plt = Plot2D::new();
+    // plt
+    //     .set_domain(epochs.clone())
+    //     .insert_image(train_history.clone())
+    //     .set_xlabel(r"Epoch")
+    //     .set_ylabel(r"Train loss")
+    //     .set_yscale(PlotScale::Log)
+    //     .set_style(PlotStyle::Nature)
+    //     .tight_layout()
+    //     .set_dpi(600)
+    //     .set_path("train_loss.png")
+    //     .savefig()?;
 
-    let mut plt = Plot2D::new();
-    plt
-        .set_domain(epochs.clone())
-        .insert_image(val_history.clone())
-        .set_xlabel(r"Epoch")
-        .set_ylabel(r"Val loss")
-        .set_yscale(PlotScale::Log)
-        .set_style(PlotStyle::Nature)
-        .tight_layout()
-        .set_dpi(600)
-        .set_path("val_loss.png")
-        .savefig()?;
+    // let mut plt = Plot2D::new();
+    // plt
+    //     .set_domain(epochs.clone())
+    //     .insert_image(val_history.clone())
+    //     .set_xlabel(r"Epoch")
+    //     .set_ylabel(r"Val loss")
+    //     .set_yscale(PlotScale::Log)
+    //     .set_style(PlotStyle::Nature)
+    //     .tight_layout()
+    //     .set_dpi(600)
+    //     .set_path("val_loss.png")
+    //     .savefig()?;
 
-    let ds_test = Dataset::generate(1, 1, &dev)?;
-    let (test_u, test_y, test_Gu) = ds_test.train_set(&dev)?;
-    let Gu_hat = model.forward(&test_u, &test_y)?;
+    // let ds_test = Dataset::generate(1, 1, &dev)?;
+    // let (test_u, test_y, test_Gu) = ds_test.train_set(&dev)?;
+    // let Gu_hat = model.forward(&test_u, &test_y)?;
 
-    let test_u: Vec<f32> = test_u.detach().reshape(100).unwrap().to_vec1()?;
-    let test_u = test_u.into_iter().map(|x| x as f64).collect::<Vec<f64>>();
+    // let test_u: Vec<f32> = test_u.detach().reshape(100).unwrap().to_vec1()?;
+    // let test_u = test_u.into_iter().map(|x| x as f64).collect::<Vec<f64>>();
 
 
-    let test_Gu: Vec<f32> = test_Gu
-        .iter()
-        .map(|Gu| {
-            let Gu = Gu.detach().reshape(1).unwrap().to_vec1().unwrap();
-            Gu[0]
-        })
-        .collect();
-    let test_Gu = test_Gu.into_iter().map(|x| x as f64).collect::<Vec<f64>>();
+    // let test_Gu: Vec<f32> = test_Gu
+    //     .iter()
+    //     .map(|Gu| {
+    //         let Gu = Gu.detach().reshape(1).unwrap().to_vec1().unwrap();
+    //         Gu[0]
+    //     })
+    //     .collect();
+    // let test_Gu = test_Gu.into_iter().map(|x| x as f64).collect::<Vec<f64>>();
 
-    let test_y: Vec<f32> = test_y
-        .iter()
-        .map(|y| {
-            let y = y.detach().reshape(1).unwrap().to_vec1().unwrap();
-            y[0]
-        })
-        .collect();
-    let test_y = test_y.into_iter().map(|x| x as f64).collect::<Vec<f64>>();
+    // let test_y: Vec<f32> = test_y
+    //     .iter()
+    //     .map(|y| {
+    //         let y = y.detach().reshape(1).unwrap().to_vec1().unwrap();
+    //         y[0]
+    //     })
+    //     .collect();
+    // let test_y = test_y.into_iter().map(|x| x as f64).collect::<Vec<f64>>();
 
-    let Gu_hat: Vec<f32> = Gu_hat
-        .iter()
-        .map(|Gu_hat| {
-            let Gu_hat = Gu_hat.detach().reshape(1).unwrap().to_vec1().unwrap();
-            Gu_hat[0]
-        })
-        .collect();
-    let Gu_hat = Gu_hat.into_iter().map(|x| x as f64).collect::<Vec<f64>>();
+    // let Gu_hat: Vec<f32> = Gu_hat
+    //     .iter()
+    //     .map(|Gu_hat| {
+    //         let Gu_hat = Gu_hat.detach().reshape(1).unwrap().to_vec1().unwrap();
+    //         Gu_hat[0]
+    //     })
+    //     .collect();
+    // let Gu_hat = Gu_hat.into_iter().map(|x| x as f64).collect::<Vec<f64>>();
 
-    let x_train = linspace(0, 1, 100);
+    // let x_train = linspace(0, 1, 100);
 
-    let mut plt = Plot2D::new();
-    plt
-        .set_domain(x_train)
-        .insert_image(test_u)
-        .set_xlabel(r"$x$")
-        .set_ylabel(r"$V(x)$")
-        .set_style(PlotStyle::Nature)
-        .tight_layout()
-        .set_dpi(600)
-        .set_path("potential_test.png")
-        .savefig()?;
+    // let mut plt = Plot2D::new();
+    // plt
+    //     .set_domain(x_train)
+    //     .insert_image(test_u)
+    //     .set_xlabel(r"$x$")
+    //     .set_ylabel(r"$V(x)$")
+    //     .set_style(PlotStyle::Nature)
+    //     .tight_layout()
+    //     .set_dpi(600)
+    //     .set_path("potential_test.png")
+    //     .savefig()?;
 
-    let mut plt = Plot2D::new();
-    plt
-        .set_domain(test_y)
-        .insert_image(test_Gu)
-        .insert_image(Gu_hat)
-        .set_xlabel(r"$t$")
-        .set_ylabel(r"$x(t)$")
-        .set_line_style(vec![(0, LineStyle::Solid), (1, LineStyle::Dashed)])
-        .set_style(PlotStyle::Nature)
-        .tight_layout()
-        .set_dpi(600)
-        .set_path("x_test.png")
-        .savefig()?;
+    // let mut plt = Plot2D::new();
+    // plt
+    //     .set_domain(test_y)
+    //     .insert_image(test_Gu)
+    //     .insert_image(Gu_hat)
+    //     .set_xlabel(r"$t$")
+    //     .set_ylabel(r"$x(t)$")
+    //     .set_line_style(vec![(0, LineStyle::Solid), (1, LineStyle::Dashed)])
+    //     .set_style(PlotStyle::Nature)
+    //     .tight_layout()
+    //     .set_dpi(600)
+    //     .set_path("x_test.png")
+    //     .savefig()?;
 
     Ok(())
 }
@@ -432,6 +433,77 @@ impl Dataset {
             self.val_y.iter().map(|y| y.to_device(dev).unwrap()).collect(),
             self.val_Gu.iter().map(|Gu| Gu.to_device(dev).unwrap()).collect()
         ))
+    }
+
+    #[allow(non_snake_case)]
+    pub fn write_parquet(&self) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let (train_u, train_y, train_Gu) = self.train_set(&Device::Cpu)?;
+        let (val_u, val_y, val_Gu) = self.val_set(&Device::Cpu)?;
+
+        let train_u: Vec<Vec<f32>> = train_u.detach().to_vec2()?;
+        let train_u = py_matrix(train_u);
+        let train_y = train_y.iter().flat_map(|y| {
+            let y: Vec<f32> = y.detach().reshape(train_u.row).unwrap().to_vec1().unwrap();
+            y.into_iter().map(|x| x as f64).collect::<Vec<f64>>()
+        }).collect::<Vec<_>>();
+        let train_y = matrix(train_y, train_u.row, 100, Col);
+        let train_Gu = train_Gu.iter()
+            .flat_map(|Gu| {
+                let Gu: Vec<f32> = Gu.detach().reshape(train_u.row).unwrap().to_vec1().unwrap();
+                Gu.into_iter().map(|x| x as f64).collect::<Vec<f64>>()
+            }).collect::<Vec<_>>();
+        let train_Gu = matrix(train_Gu, train_u.row, 100, Col);
+
+        let train_y = train_y.change_shape();
+        let train_Gu = train_Gu.change_shape();
+
+        let train_u = train_u.data;
+        let train_y = train_y.data;
+        let train_Gu = train_Gu.data;
+
+        let val_u: Vec<Vec<f32>> = val_u.detach().to_vec2()?;
+        let val_u = py_matrix(val_u);
+        let val_y = val_y.iter().flat_map(|y| {
+            let y: Vec<f32> = y.detach().reshape(val_u.row).unwrap().to_vec1().unwrap();
+            y.into_iter().map(|x| x as f64).collect::<Vec<f64>>()
+        }).collect::<Vec<_>>();
+        let val_y = matrix(val_y, val_u.row, 100, Col);
+        let val_Gu = val_Gu.iter()
+            .flat_map(|Gu| {
+                let Gu: Vec<f32> = Gu.detach().reshape(val_u.row).unwrap().to_vec1().unwrap();
+                Gu.into_iter().map(|x| x as f64).collect::<Vec<f64>>()
+            }).collect::<Vec<_>>();
+        let val_Gu = matrix(val_Gu, val_u.row, 100, Col);
+
+        let val_y = val_y.change_shape();
+        let val_Gu = val_Gu.change_shape();
+
+        let val_u = val_u.data;
+        let val_y = val_y.data;
+        let val_Gu = val_Gu.data;
+
+        let mut df = DataFrame::new(vec![]);
+        df.push("train_u", Series::new(train_u));
+        df.push("train_y", Series::new(train_y));
+        df.push("train_Gu", Series::new(train_Gu));
+
+        let data_folder = "data";
+        if !std::path::Path::new(data_folder).exists() {
+            std::fs::create_dir(data_folder)?;
+        }
+
+        let train_path = format!("{}/train.parquet", data_folder);
+        df.write_parquet(&train_path, CompressionOptions::Uncompressed)?;
+
+        let mut df = DataFrame::new(vec![]);
+        df.push("val_u", Series::new(val_u));
+        df.push("val_y", Series::new(val_y));
+        df.push("val_Gu", Series::new(val_Gu));
+
+        let val_path = format!("{}/val.parquet", data_folder);
+        df.write_parquet(&val_path, CompressionOptions::Uncompressed)?;
+
+        Ok(())
     }
 }
 
