@@ -2,14 +2,17 @@ use peroxide::fuga::*;
 use peroxide::fuga::anyhow::Result;
 use rugfield::{grf, Kernel};
 use rayon::prelude::*;
-use candle_core::{Device, Module, Tensor, DType};
+use candle_core::{scalar::TensorScalar, DType, Device, Module, Tensor};
 use candle_nn::{Linear, VarBuilder, linear, VarMap, Optimizer, loss};
 use candle_optimisers::adam::{Adam, ParamsAdam};
 use indicatif::{ProgressBar, ProgressStyle, ParallelProgressIterator};
 
+#[allow(non_snake_case)]
 fn main() -> Result<()> {
     let dev = Device::cuda_if_available(0)?;
     println!("Device: {:?}", dev);
+
+    let mut rng = smallrng_from_seed(42);
 
     let n_train = 1000usize;
     let n_val = 200usize;
@@ -17,34 +20,78 @@ fn main() -> Result<()> {
     let ds = Dataset::generate(n_train, n_val, &dev)?;
 
     // Plot data
-    let u_train = &ds.train_u.detach().to_vec2()?;
-    let y_train = &ds.train_y[0].to_vec1()?;
-    let gu_train = &ds.train_Gu[0].to_vec1()?;
-    
-    let x_train = linspace(0, 1, 100);
+    //let u_train = &ds.train_u.detach().to_vec2()?;
+    //let y_train = ds.train_y
+    //    .iter()
+    //    .flat_map(|y| {
+    //        let y: Vec<f32> = y.detach().to_vec1().unwrap();
+    //        y.into_iter().map(|x| x as f64).collect::<Vec<f64>>()
+    //    })
+    //    .collect();
+    //let y_train = matrix(y_train, n_train, 100, Col);
+    //let gu_train = ds.train_Gu
+    //    .iter()
+    //    .flat_map(|Gu| {
+    //        let Gu: Vec<f32> = Gu.detach().to_vec1().unwrap();
+    //        Gu.into_iter().map(|x| x as f64).collect::<Vec<f64>>()
+    //    })
+    //    .collect();
+    //let gu_train = matrix(gu_train, n_train, 100, Col);
+    //
+    //let x_train = linspace(0, 1, 100);
+
+    //let mut plt = Plot2D::new();
+    //plt
+    //    .set_domain(x_train)
+    //    .insert_image(u_train[0].clone())
+    //    .set_xlabel(r"$x$")
+    //    .set_ylabel(r"$V(x)$")
+    //    .set_style(PlotStyle::Nature)
+    //    .tight_layout()
+    //    .set_dpi(600)
+    //    .set_path("potential.png")
+    //    .savefig()?;
+
+    //let mut plt = Plot2D::new();
+    //plt
+    //    .set_domain(y_train.row(0))
+    //    .insert_image(gu_train.row(0))
+    //    .set_xlabel(r"$t$")
+    //    .set_ylabel(r"$x(t)$")
+    //    .set_style(PlotStyle::Nature)
+    //    .tight_layout()
+    //    .set_dpi(600)
+    //    .set_path("x.png")
+    //    .savefig()?;
+
+    let (model, train_history, val_history) = train(ds, &dev, &mut rng)?;
+
+    let epochs = linspace(1, train_history.len() as f64, train_history.len());
 
     let mut plt = Plot2D::new();
     plt
-        .set_domain(x_train)
-        .insert_image(u_train[0].clone())
-        .set_xlabel(r"$x$")
-        .set_ylabel(r"$V(x)$")
+        .set_domain(epochs.clone())
+        .insert_image(train_history.clone())
+        .set_xlabel(r"Epoch")
+        .set_ylabel(r"Train loss")
+        .set_yscale(PlotScale::Log)
         .set_style(PlotStyle::Nature)
         .tight_layout()
         .set_dpi(600)
-        .set_path("potential.png")
+        .set_path("train_loss.png")
         .savefig()?;
 
     let mut plt = Plot2D::new();
     plt
-        .set_domain(y_train.clone())
-        .insert_image(gu_train.clone())
-        .set_xlabel(r"$t$")
-        .set_ylabel(r"$x(t)$")
+        .set_domain(epochs.clone())
+        .insert_image(val_history.clone())
+        .set_xlabel(r"Epoch")
+        .set_ylabel(r"Val loss")
+        .set_yscale(PlotScale::Log)
         .set_style(PlotStyle::Nature)
         .tight_layout()
         .set_dpi(600)
-        .set_path("x.png")
+        .set_path("val_loss.png")
         .savefig()?;
 
     Ok(())
@@ -54,9 +101,13 @@ fn main() -> Result<()> {
 //  Train
 // └─────────────────────────────────────────────────────────┘
 #[allow(non_snake_case)]
-pub fn train(ds: Dataset, dev: &Device, rng: &mut SmallRng) -> Result<DeepONet> {
+pub fn train(ds: Dataset, dev: &Device, rng: &mut SmallRng) -> Result<(DeepONet, Vec<f64>, Vec<f64>)> {
     let (train_u, train_y, train_Gu) = ds.train_set(dev)?;
     let (val_u, val_y, val_Gu) = ds.val_set(dev)?;
+
+    println!("train_u Dtype: {:?}", train_u.dtype());
+    println!("train_y Dtype: {:?}", train_y[0].dtype());
+    println!("train_Gu Dtype: {:?}", train_Gu[0].dtype());
 
     let hparam = HyperParams {
         x_sensors: 100,
@@ -80,8 +131,11 @@ pub fn train(ds: Dataset, dev: &Device, rng: &mut SmallRng) -> Result<DeepONet> 
     };
     let mut adam = Adam::new(varmap.all_vars(), adam_param)?;
 
-    let mut train_loss = vec![0f32; hparam.epoch];
-    let mut val_loss = vec![0f32; hparam.epoch];
+    let mut train_history = vec![0f64; hparam.epoch];
+    let mut val_history = vec![0f64; hparam.epoch];
+
+    let mut train_loss = 0f32;
+    let mut val_loss = 0f32;
 
     let train_batch = train_u.dims()[0] / hparam.batch_size;
     
@@ -93,18 +147,50 @@ pub fn train(ds: Dataset, dev: &Device, rng: &mut SmallRng) -> Result<DeepONet> 
 
     for epoch in 0 .. hparam.epoch {
         pb.set_position(epoch as u64);
-        //TODO
-        //let msg = format!("epoch: {}, train_loss: {:.4e}, val_loss: {:.4e}", epoch, train_loss[], val_loss);
+        let msg = format!("epoch: {}, train_loss: {:.4e}, val_loss: {:.4e}", epoch, train_loss, val_loss);
         pb.set_message(msg);
 
         let mut ics = (0u32 .. train_u.dims()[0] as u32).collect::<Vec<_>>();
         ics.shuffle(rng);
 
         let mut epoch_loss = 0f32;
-        for i in 0 .. 
+        for i in 0 .. train_batch {
+            let batch_ics = Tensor::from_slice(
+                &ics[i * hparam.batch_size .. (i+1) * hparam.batch_size],
+                hparam.batch_size,
+                dev
+            )?;
+            let batch_u = train_u.index_select(&batch_ics, 0)?;
+            let batch_y = batch_slicing(&train_y, &batch_ics)?;
+            let batch_Gu = batch_slicing(&train_Gu, &batch_ics)?;
+
+            let Gu_hat = model.forward(&batch_u, &batch_y)?;
+            let loss: Tensor = batch_Gu.iter().zip(Gu_hat.iter())
+                .map(|(Gu, Gu_hat)| loss::mse(Gu, Gu_hat).unwrap())
+                .reduce(|a, b| (a + b).unwrap()).unwrap();
+            let loss = (loss / Tensor::new(100f32, dev)?)?;
+            adam.backward_step(&loss)?;
+
+            let loss: f32 = loss.to_scalar()?;
+            epoch_loss += loss;
+        }
+        epoch_loss /= train_batch as f32;
+        train_loss = epoch_loss;
+
+        let Gu_hat = model.forward(&val_u, &val_y)?;
+        let loss: Tensor = val_Gu.iter().zip(Gu_hat.iter())
+            .map(|(Gu, Gu_hat)| loss::mse(Gu, Gu_hat).unwrap())
+            .reduce(|a, b| (a + b).unwrap()).unwrap();
+        val_loss = loss.to_scalar()?;
+        val_loss /= 100f32;
+
+        train_history[epoch] = train_loss as f64;
+        val_history[epoch] = val_loss as f64;
     }
 
-    todo!()
+    println!("train_loss: {:.4e}, val_loss: {:.4e}", train_loss, val_loss);
+
+    Ok((model, train_history, val_history))
 }
 
 // ┌─────────────────────────────────────────────────────────┐
@@ -161,8 +247,8 @@ impl DeepONet {
     }
 
     pub fn forward(&self, u: &Tensor, y_vec: &[Tensor]) -> Result<Vec<Tensor>> {
-        let mut u = u.clone();
-        let mut y_vec = y_vec.to_vec();
+        let mut u = u.clone();          // u: B x m
+        let mut y_vec = y_vec.to_vec(); // y_vec: B x l
         let n = self.branch_net.len();
         for (branch, trunk) in self.branch_net.iter().take(n-1).zip(self.trunk_net.iter()) {
             u = branch.forward(&u)?;
@@ -172,10 +258,11 @@ impl DeepONet {
                 *y = y.gelu()?;
             }
         }
-        u = self.branch_net.last().unwrap().forward(&u)?;       // u: B x p
+        u = self.branch_net.last().unwrap().forward(&u)?;           // u: B x p
         for (y, bias) in y_vec.iter_mut().zip(self.bias.iter()) {
-            *y = self.trunk_net.last().unwrap().forward(y)?;    // y: B x p
-            *y = y.mul(&u)?.sum(1)?.broadcast_add(bias)?;       // y: B
+            *y = self.trunk_net.last().unwrap().forward(y)?;        // y: B x p
+            *y = y.mul(&u)?.sum(1)?.broadcast_add(bias)?;           // y: B
+            *y = y.reshape((y.dims()[0],1))?;                       // y: B x 1
         }
 
         Ok(y_vec)
@@ -236,6 +323,10 @@ impl Dataset {
         let u_vec = grf_scaled_vec.par_iter()
             .map(|grf| grf.iter().zip(x_vec.iter()).map(|(g, t)| 1f64 - 4f64 * g * t * (1f64 - t)).collect::<Vec<_>>())
             .collect::<Vec<_>>();
+
+        let u_vec = u_vec.into_iter().map(|u| u.into_iter().map(|u| u as f32).collect::<Vec<_>>()).collect::<Vec<_>>();
+        let y_vec = y_vec.into_iter().map(|y| y.into_iter().map(|y| y as f32).collect::<Vec<_>>()).collect::<Vec<_>>();
+        let Gu_vec = Gu_vec.into_iter().map(|Gu| Gu.into_iter().map(|Gu| Gu as f32).collect::<Vec<_>>()).collect::<Vec<_>>();
 
         let train_u = u_vec.iter().take(n_train).flatten().cloned().collect::<Vec<_>>();
         let train_y = y_vec.iter().take(n_train).cloned().collect::<Vec<_>>();
@@ -311,17 +402,26 @@ pub fn solve_grf_ode(grf: &[f64]) -> anyhow::Result<(Vec<f64>, Vec<f64>)> {
     let solver = BasicODESolver::new(RK4);
     let (t_vec, xp_vec) = solver.solve(&grf_ode, (0f64, 10f64), 1e-3)?;
     let (x_vec, _): (Vec<f64>, Vec<f64>) = xp_vec.into_iter().map(|xp| (xp[0], xp[1])).unzip();
+
+    // Choose 100 samples only
+    let ics = linspace(0, t_vec.len() as f64 - 1f64, 100);
+    let ics = ics.into_iter().map(|x| x.round() as usize).collect::<Vec<_>>();
+
+    let t_vec = ics.iter().map(|i| t_vec[*i]).collect();
+    let x_vec = ics.iter().map(|i| x_vec[*i]).collect();
+
     Ok((t_vec, x_vec))
 }
 
 // ┌─────────────────────────────────────────────────────────┐
 //  Utils
 // └─────────────────────────────────────────────────────────┘
-pub fn vec_to_tensor(vec: Vec<Vec<f64>>, dev: &Device) -> Result<Vec<Tensor>> {
+pub fn vec_to_tensor(vec: Vec<Vec<f32>>, dev: &Device) -> Result<Vec<Tensor>> {
     let mat = py_matrix(vec);
     let mut tensors = vec![];
     for i in 0 .. mat.col {
-        tensors.push(Tensor::from_vec(mat.col(i), &[mat.row, 1], dev)?);
+        let col = mat.col(i).into_iter().map(|x| x as f32).collect::<Vec<_>>();
+        tensors.push(Tensor::from_vec(col, &[mat.row, 1], dev)?);
     }
     Ok(tensors)
 }
