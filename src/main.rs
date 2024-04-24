@@ -14,8 +14,8 @@ fn main() -> Result<()> {
 
     let mut rng = smallrng_from_seed(42);
 
-    let n_train = 1000usize;
-    let n_val = 200usize;
+    let n_train = 10000usize;
+    let n_val = 2000usize;
 
     let ds = Dataset::generate(n_train, n_val, &dev)?;
 
@@ -94,6 +94,69 @@ fn main() -> Result<()> {
         .set_path("val_loss.png")
         .savefig()?;
 
+    let ds_test = Dataset::generate(1, 1, &dev)?;
+    let (test_u, test_y, test_Gu) = ds_test.train_set(&dev)?;
+    let Gu_hat = model.forward(&test_u, &test_y)?;
+
+    let test_u: Vec<f32> = test_u.detach().reshape(100).unwrap().to_vec1()?;
+    let test_u = test_u.into_iter().map(|x| x as f64).collect::<Vec<f64>>();
+
+
+    let test_Gu: Vec<f32> = test_Gu
+        .iter()
+        .map(|Gu| {
+            let Gu = Gu.detach().reshape(1).unwrap().to_vec1().unwrap();
+            Gu[0]
+        })
+        .collect();
+    let test_Gu = test_Gu.into_iter().map(|x| x as f64).collect::<Vec<f64>>();
+
+    let test_y: Vec<f32> = test_y
+        .iter()
+        .map(|y| {
+            let y = y.detach().reshape(1).unwrap().to_vec1().unwrap();
+            y[0]
+        })
+        .collect();
+    let test_y = test_y.into_iter().map(|x| x as f64).collect::<Vec<f64>>();
+
+    let Gu_hat: Vec<f32> = Gu_hat
+        .iter()
+        .map(|Gu_hat| {
+            let Gu_hat = Gu_hat.detach().reshape(1).unwrap().to_vec1().unwrap();
+            Gu_hat[0]
+        })
+        .collect();
+    let Gu_hat = Gu_hat.into_iter().map(|x| x as f64).collect::<Vec<f64>>();
+
+    let x_train = linspace(0, 1, 100);
+
+    let mut plt = Plot2D::new();
+    plt
+        .set_domain(x_train)
+        .insert_image(test_u)
+        .set_xlabel(r"$x$")
+        .set_ylabel(r"$V(x)$")
+        .set_style(PlotStyle::Nature)
+        .tight_layout()
+        .set_dpi(600)
+        .set_path("potential_test.png")
+        .savefig()?;
+
+    let mut plt = Plot2D::new();
+    plt
+        .set_domain(test_y)
+        .insert_image(test_Gu)
+        .insert_image(Gu_hat)
+        .set_xlabel(r"$t$")
+        .set_ylabel(r"$x(t)$")
+        .set_line_style(vec![(0, LineStyle::Solid), (1, LineStyle::Dashed)])
+        .set_style(PlotStyle::Nature)
+        .tight_layout()
+        .set_dpi(600)
+        .set_path("x_test.png")
+        .savefig()?;
+
     Ok(())
 }
 
@@ -114,11 +177,13 @@ pub fn train(ds: Dataset, dev: &Device, rng: &mut SmallRng) -> Result<(DeepONet,
         y_sensors: 100,
         p: 10,
         hidden_size: 40,
-        hidden_depth: 3,
-        learning_rate: 1e-3,
-        batch_size: 256,
-        epoch: 200
+        hidden_depth: 5,
+        learning_rate: 1e-2,
+        batch_size: 1000,
+        epoch: 500
     };
+
+    let mut lr = hparam.learning_rate;
 
     let varmap = VarMap::new();
     let vb = VarBuilder::from_varmap(&varmap, DType::F32, dev);
@@ -186,6 +251,7 @@ pub fn train(ds: Dataset, dev: &Device, rng: &mut SmallRng) -> Result<(DeepONet,
 
         train_history[epoch] = train_loss as f64;
         val_history[epoch] = val_loss as f64;
+        adam.set_learning_rate(lr);
     }
 
     println!("train_loss: {:.4e}, val_loss: {:.4e}", train_loss, val_loss);
