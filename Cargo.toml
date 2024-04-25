@@ -6,9 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-candle-core = { version = "0.4.1", features = ["cuda"] }
-candle-nn = { version = "0.4.1", features = ["cuda"] }
-candle-optimisers = { version = "0.4.0", features = ["cuda"] }
 indicatif = { version = "0.17.8", features = ["rayon"] }
 peroxide = { version = "0.37.2", features = ["plot", "parquet"] }
 rayon = "1.10.0"
