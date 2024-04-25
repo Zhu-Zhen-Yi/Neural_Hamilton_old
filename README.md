@@ -2,6 +2,16 @@
 
 Using DeepONet to solve Hamilton equations.
 
+## Tech stack
+
+- `rugfield`: Rust library for generating Gaussian Random Fields
+
+- `peroxide`: Rust library for solving ODE & save results as parquet file
+
+- `pytorch`: Python library for training DeepONet
+
+- `wandb`: Python library for logging training process
+
 ## Problem description
 
 - Input : Potential energy & Target points
