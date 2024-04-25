@@ -8,6 +8,8 @@ Using DeepONet to solve Hamilton equations.
 
 - `peroxide`: Rust library for solving ODE & save results as parquet file
 
+- `polars`: Python library for reading parquet file
+
 - `pytorch`: Python library for training DeepONet
 
 - `wandb`: Python library for logging training process
