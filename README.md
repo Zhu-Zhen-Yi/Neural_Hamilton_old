@@ -1,6 +1,6 @@
 # Neural Hamilton
 
-Using DeepONet to solve Hamilton equations.
+Use DeepONet to solve Hamilton equations.
 
 ## Tech stack
 
