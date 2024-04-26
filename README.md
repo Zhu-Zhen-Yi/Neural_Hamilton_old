@@ -20,7 +20,7 @@ Use DeepONet to solve Hamilton equations.
   ```math
   V(x) = 2 - 16 \times \text{GRF}(x) \times x(x-1)^2, \quad t = [0,\,0.01,\,\cdots,\,1]
   ```
-  ![potential.png](./figs/chebyshev/potential.png)
+  ![potential.png](./figs/chebyshev_64_5_more/potential.png)
 
 - Hamilton equation:
   ```math
@@ -32,16 +32,16 @@ Use DeepONet to solve Hamilton equations.
   ```
 
 - Output: Trajectory at target points
-  ![trajectory.png](./figs/chebyshev/trajectory.png)
+  ![trajectory.png](./figs/chebyshev_64_5_more/trajectory.png)
 
 ## Results
 
 - For one of validation data
-  ![potential_test.png](./figs/chebyshev/potential_test.png)
+  ![potential_test.png](./figs/chebyshev_64_5_more/potential_test.png)
 
-  ![trajectory_test.png](./figs/chebyshev/trajectory_test.png)
+  ![trajectory_test.png](./figs/chebyshev_64_5_more/trajectory_test.png)
 
-- Custom test data
+- Custom test data 1
   ```math
   \begin{aligned}
   &V(x) = 8 (x - 0.5)^2,~ x(0) = 0,~ x'(0) = 0 \\
@@ -50,6 +50,19 @@ Use DeepONet to solve Hamilton equations.
   \end{aligned}
   ```
 
-  ![potential_pred.png](./figs/chebyshev/potential_pred.png)
+  ![potential_pred.png](./figs/chebyshev_64_5_more/potential_pred.png)
 
-  ![trajectory_pred.png](./figs/chebyshev/trajectory_pred.png)
+  ![trajectory_pred.png](./figs/chebyshev_64_5_more/trajectory_pred.png)
+
+- Custom test data 2
+  ```math
+  \begin{aligned}
+  &V(x) = 4|x - 0.5|,~ x(0) = 0,~ x'(0) = 0 \\
+  &x'' = -V'(x) = \begin{cases} 4, & x < 0.5 \\ -4, & x > 0.5 \end{cases} \\
+  \Rightarrow ~ &x(t) = \begin{cases} 2t^2 & 0 < t < 0.5 \\ -2t^2 + 4t - 1& 0.5 \leq t < 1 \end{cases}
+  \end{aligned}
+  ```
+
+  ![potential_pred2.png](./figs/chebyshev_64_5_more/potential_pred2.png)
+
+  ![trajectory_pred2.png](./figs/chebyshev_64_5_more/trajectory_pred2.png)
