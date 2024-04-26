@@ -20,7 +20,7 @@ Use DeepONet to solve Hamilton equations.
   ```math
   V(x) = 2 - 16 \times \text{GRF}(x) \times x(x-1)^2, \quad t = [0,\,0.01,\,\cdots,\,1]
   ```
-  ![potential.png](./figs/potential.png)
+  ![potential.png](./figs/chebyshev/potential.png)
 
 - Hamilton equation:
   ```math
@@ -32,14 +32,14 @@ Use DeepONet to solve Hamilton equations.
   ```
 
 - Output: Trajectory at target points
-  ![trajectory.png](./figs/trajectory.png)
+  ![trajectory.png](./figs/chebyshev/trajectory.png)
 
 ## Results
 
 - For one of validation data
-  ![potential_test.png](./figs/potential_test.png)
+  ![potential_test.png](./figs/chebyshev/potential_test.png)
 
-  ![trajectory_test.png](./figs/trajectory_test.png)
+  ![trajectory_test.png](./figs/chebyshev/trajectory_test.png)
 
 - Custom test data
   ```math
@@ -50,6 +50,6 @@ Use DeepONet to solve Hamilton equations.
   \end{aligned}
   ```
 
-  ![potential_pred.png](./figs/potential_pred.png)
+  ![potential_pred.png](./figs/chebyshev/potential_pred.png)
 
-  ![trajectory_pred.png](./figs/trajectory_pred.png)
+  ![trajectory_pred.png](./figs/chebyshev/trajectory_pred.png)

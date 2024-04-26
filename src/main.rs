@@ -1,8 +1,8 @@
 use peroxide::fuga::*;
 use peroxide::fuga::anyhow::Result;
 use rugfield::{grf, Kernel};
-use rayon::{prelude::*, vec};
-use indicatif::{ProgressBar, ProgressStyle, ParallelProgressIterator};
+use rayon::prelude::*;
+use indicatif::{ProgressBar, ParallelProgressIterator};
 
 #[allow(non_snake_case)]
 fn main() -> std::result::Result<(), Box<dyn Error>> {
@@ -191,11 +191,17 @@ pub fn solve_grf_ode(grf: &[f64]) -> anyhow::Result<(Vec<f64>, Vec<f64>)> {
     let (x_vec, _): (Vec<f64>, Vec<f64>) = xp_vec.into_iter().map(|xp| (xp[0], xp[1])).unzip();
 
     // Choose 100 samples only
-    let ics = linspace(0, t_vec.len() as f64 - 1f64, 100);
-    let ics = ics.into_iter().map(|x| x.round() as usize).collect::<Vec<_>>();
+    //let ics = linspace(0, t_vec.len() as f64 - 1f64, 100);
+    //let ics = ics.into_iter().map(|x| x.round() as usize).collect::<Vec<_>>();
 
-    let t_vec = ics.iter().map(|i| t_vec[*i]).collect();
-    let x_vec = ics.iter().map(|i| x_vec[*i]).collect();
+    //let t_vec = ics.iter().map(|i| t_vec[*i]).collect();
+    //let x_vec = ics.iter().map(|i| x_vec[*i]).collect();
+
+    // Chebyshev nodes
+    let n = 100;
+    let cs = cubic_hermite_spline(&t_vec, &x_vec, Quadratic)?;
+    let t_vec = chebyshev_nodes(n, 0f64, 2f64);
+    let x_vec = cs.eval_vec(&t_vec);
 
     Ok((t_vec, x_vec))
 }
