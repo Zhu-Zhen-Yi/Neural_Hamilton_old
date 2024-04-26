@@ -27,7 +27,7 @@ Use DeepONet to solve Hamilton equations.
   \begin{aligned}
   \dot{x}(t) &= p(t)\\
   \dot{p}(t) &= -\frac{\partial V}{\partial x}(x(t)) \\
-  x(0) &= 0, \quad p(0) = 1
+  x(0) &= 0, \quad p(0) = 0
   \end{aligned}
   ```
 
