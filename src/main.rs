@@ -30,12 +30,9 @@ pub fn bezier(x: f64, a: f64) -> f64 {
     2f64 * t * (1f64 - t)
 }
 
-
-
-pub fn potential(x: f64, grf: f64, a: f64) -> f64 {
-    2f64 - 8f64 * grf * bezier(x, a)
+pub fn potential(x: f64, grf: f64, a: f64, b: f64) -> f64 {
+    2f64 - 4f64 * grf * bezier(x, a) * b
 }
-
 
 #[allow(non_snake_case)]
 #[derive(Clone)]
@@ -56,6 +53,8 @@ impl Dataset {
         let l = u_l.sample(n);
         let a_dist = Uniform(0f64, 1f64);
         let a_samples = a_dist.sample(n);
+        let b_dist = Uniform(1f64, 4f64);
+        let b_samples = b_dist.sample(n);
 
         let grf_vec = (0 .. n).into_par_iter().zip(l.into_par_iter())
             .progress_with(ProgressBar::new(n as u64))
@@ -83,8 +82,9 @@ impl Dataset {
 
         let (y_vec, Gu_vec): (Vec<Vec<f64>>, Vec<Vec<f64>>) = grf_scaled_vec.par_iter()
             .zip(a_samples.par_iter())
+            .zip(b_samples.par_iter())
             .progress_with(ProgressBar::new(n as u64))
-            .map(|(grf, a)| solve_grf_ode(grf, *a).unwrap())
+            .map(|((grf, a), b)| solve_grf_ode(grf, *a, *b).unwrap())
             .unzip();
 
         // Filter odd data
@@ -102,7 +102,8 @@ impl Dataset {
         let x_vec = linspace(0, 1, m);
         let u_vec = grf_scaled_vec.par_iter()
             .zip(a_samples.into_par_iter())
-            .map(|(grf, a)| grf.iter().zip(x_vec.iter()).map(|(g, t)| potential(*t, *g, a)).collect::<Vec<_>>())
+            .zip(b_samples.into_par_iter())
+            .map(|((grf, a), b)| grf.iter().zip(x_vec.iter()).map(|(g, t)| potential(*t, *g, a, b)).collect::<Vec<_>>())
             .collect::<Vec<_>>();
 
         let n_train = (n as f64 * f_train).round() as usize;
@@ -185,9 +186,9 @@ pub struct GRFODE {
 }
 
 impl GRFODE {
-    pub fn new(grf: &[f64], a: f64) -> anyhow::Result<Self> {
+    pub fn new(grf: &[f64], a: f64, b: f64) -> anyhow::Result<Self> {
         let x = linspace(0f64, 1f64, grf.len());
-        let y = grf.iter().zip(x.iter()).map(|(g, t)| potential(*t, *g, a)).collect::<Vec<_>>();
+        let y = grf.iter().zip(x.iter()).map(|(g, t)| potential(*t, *g, a, b)).collect::<Vec<_>>();
         let cs = cubic_hermite_spline(&x, &y, Quadratic)?;
         let cs_deriv = cs.derivative();
         Ok(Self { cs, cs_deriv })
@@ -206,8 +207,8 @@ impl ODEProblem for GRFODE {
     }
 }
 
-pub fn solve_grf_ode(grf: &[f64], a: f64) -> anyhow::Result<(Vec<f64>, Vec<f64>)> {
-    let grf_ode = GRFODE::new(grf, a)?;
+pub fn solve_grf_ode(grf: &[f64], a: f64, b: f64) -> anyhow::Result<(Vec<f64>, Vec<f64>)> {
+    let grf_ode = GRFODE::new(grf, a, b)?;
     let solver = BasicODESolver::new(RK4);
     let (t_vec, xp_vec) = solver.solve(&grf_ode, (0f64, 2f64), 1e-3)?;
     let (x_vec, _): (Vec<f64>, Vec<f64>) = xp_vec.into_iter().map(|xp| (xp[0], xp[1])).unzip();
