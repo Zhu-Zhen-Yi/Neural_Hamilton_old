@@ -71,18 +71,20 @@ def objective(trial, console, progress, task_id):
 
     try:
         run = wandb.init(project="NeuralHamilton-Optuna", config=hparams, reinit=False)
+        progress_epoch = progress.add_task("[cyan]Epochs", total=hparams["epochs"])
         for epoch in range(hparams["epochs"]):
             train_loss = train_epoch(model, optimizer, dl_train, device)
             val_loss = evaluate(model, dl_val, device)
             wandb.log({"train_loss": train_loss, "val_loss": val_loss, "epoch": epoch+1, "lr": scheduler.get_last_lr()[0]})
             scheduler.step()
-
-            progress.update(task_id, advance=1)
+            progress.update(progress_epoch, advance=1)
 
             if trial.should_prune():
                 raise optuna.TrialPruned()
+        progress.update(task_id, advance=1)
     except optuna.TrialPruned:
         run.finish(exit_code=255)
+        progress.update(task_id, advance=1)
         raise
 
     trial_path = os.path.join(checkpoint_dir, f"trial_{trial.number}.pt")
