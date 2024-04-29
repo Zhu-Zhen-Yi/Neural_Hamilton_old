@@ -1,3 +1,5 @@
+use std::f64::consts::PI;
+
 use peroxide::fuga::*;
 use peroxide::fuga::anyhow::Result;
 use rugfield::{grf, Kernel};
@@ -6,7 +8,7 @@ use indicatif::{ProgressBar, ParallelProgressIterator};
 
 #[allow(non_snake_case)]
 fn main() -> std::result::Result<(), Box<dyn Error>> {
-    let n = 100000usize;
+    let n = 10000usize;
 
     println!("Generate dataset...");
     let ds = Dataset::generate(n, 0.8)?;
@@ -19,6 +21,22 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
 // ┌─────────────────────────────────────────────────────────┐
 //  Dataset
 // └─────────────────────────────────────────────────────────┘
+pub fn bezier(x: f64, a: f64) -> f64 {
+    let t = if a == 0.5 {
+        x
+    } else {
+        (-a + (a.powi(2) + (1f64 - 2f64 * a) * x).sqrt()) / (1f64 - 2f64 * a)
+    };
+    2f64 * t * (1f64 - t)
+}
+
+
+
+pub fn potential(x: f64, grf: f64, a: f64) -> f64 {
+    2f64 - 8f64 * grf * bezier(x, a)
+}
+
+
 #[allow(non_snake_case)]
 #[derive(Clone)]
 pub struct Dataset {
@@ -34,8 +52,10 @@ impl Dataset {
     #[allow(non_snake_case)]
     pub fn generate(n: usize, f_train: f64) -> Result<Self> {
         let m = 100; // # sensors
-        let u_l = Uniform(0.1, 0.5);
+        let u_l = Uniform(0.075, 0.5);
         let l = u_l.sample(n);
+        let a_dist = Uniform(0f64, 1f64);
+        let a_samples = a_dist.sample(n);
 
         let grf_vec = (0 .. n).into_par_iter().zip(l.into_par_iter())
             .progress_with(ProgressBar::new(n as u64))
@@ -62,8 +82,9 @@ impl Dataset {
             }).collect::<Vec<_>>();
 
         let (y_vec, Gu_vec): (Vec<Vec<f64>>, Vec<Vec<f64>>) = grf_scaled_vec.par_iter()
+            .zip(a_samples.par_iter())
             .progress_with(ProgressBar::new(n as u64))
-            .map(|grf| solve_grf_ode(grf).unwrap())
+            .map(|(grf, a)| solve_grf_ode(grf, *a).unwrap())
             .unzip();
 
         // Filter odd data
@@ -77,10 +98,11 @@ impl Dataset {
         let grf_scaled_vec = ics.iter().map(|i| grf_scaled_vec[*i].clone()).collect::<Vec<_>>();
         let y_vec = ics.iter().map(|i| y_vec[*i].clone()).collect::<Vec<_>>();
         let Gu_vec = ics.iter().map(|i| Gu_vec[*i].clone()).collect::<Vec<_>>();
-
+        
         let x_vec = linspace(0, 1, m);
         let u_vec = grf_scaled_vec.par_iter()
-            .map(|grf| grf.iter().zip(x_vec.iter()).map(|(g, t)| 2f64 - 16f64 * g * t * (1f64 - t)).collect::<Vec<_>>())
+            .zip(a_samples.into_par_iter())
+            .map(|(grf, a)| grf.iter().zip(x_vec.iter()).map(|(g, t)| potential(*t, *g, a)).collect::<Vec<_>>())
             .collect::<Vec<_>>();
 
         let n_train = (n as f64 * f_train).round() as usize;
@@ -163,9 +185,9 @@ pub struct GRFODE {
 }
 
 impl GRFODE {
-    pub fn new(grf: &[f64]) -> anyhow::Result<Self> {
+    pub fn new(grf: &[f64], a: f64) -> anyhow::Result<Self> {
         let x = linspace(0f64, 1f64, grf.len());
-        let y = grf.iter().zip(x.iter()).map(|(g, t)| 2f64 - 16f64 * g * t * (1f64 - t)).collect::<Vec<_>>();
+        let y = grf.iter().zip(x.iter()).map(|(g, t)| potential(*t, *g, a)).collect::<Vec<_>>();
         let cs = cubic_hermite_spline(&x, &y, Quadratic)?;
         let cs_deriv = cs.derivative();
         Ok(Self { cs, cs_deriv })
@@ -178,24 +200,17 @@ impl ODEProblem for GRFODE {
     }
 
     fn rhs(&self, _t: f64, y: &[f64], dy: &mut [f64]) -> anyhow::Result<()> {
-        dy[0] = y[1];                   // dot(x) = p
-        dy[1] = - self.cs_deriv.eval(y[0]);   // dot(p) = - partial V / partial x
+        dy[0] = y[1];                           // dot(x) = p
+        dy[1] = - self.cs_deriv.eval(y[0]);     // dot(p) = - partial V / partial x
         Ok(())
     }
 }
 
-pub fn solve_grf_ode(grf: &[f64]) -> anyhow::Result<(Vec<f64>, Vec<f64>)> {
-    let grf_ode = GRFODE::new(grf)?;
+pub fn solve_grf_ode(grf: &[f64], a: f64) -> anyhow::Result<(Vec<f64>, Vec<f64>)> {
+    let grf_ode = GRFODE::new(grf, a)?;
     let solver = BasicODESolver::new(RK4);
     let (t_vec, xp_vec) = solver.solve(&grf_ode, (0f64, 2f64), 1e-3)?;
     let (x_vec, _): (Vec<f64>, Vec<f64>) = xp_vec.into_iter().map(|xp| (xp[0], xp[1])).unzip();
-
-    // Choose 100 samples only
-    //let ics = linspace(0, t_vec.len() as f64 - 1f64, 100);
-    //let ics = ics.into_iter().map(|x| x.round() as usize).collect::<Vec<_>>();
-
-    //let t_vec = ics.iter().map(|i| t_vec[*i]).collect();
-    //let x_vec = ics.iter().map(|i| x_vec[*i]).collect();
 
     // Chebyshev nodes
     let n = 100;
