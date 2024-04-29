@@ -31,7 +31,7 @@ pub fn bezier(x: f64, a: f64) -> f64 {
 }
 
 pub fn potential(x: f64, grf: f64, a: f64, b: f64) -> f64 {
-    2f64 - 4f64 * grf * bezier(x, a) * b
+    2f64 - 10f64 * grf * bezier(x, a)
 }
 
 #[allow(non_snake_case)]
@@ -53,7 +53,7 @@ impl Dataset {
         let l = u_l.sample(n);
         let a_dist = Uniform(0f64, 1f64);
         let a_samples = a_dist.sample(n);
-        let b_dist = Uniform(1f64, 4f64);
+        let b_dist = Uniform(1f64, 3f64);
         let b_samples = b_dist.sample(n);
 
         let grf_vec = (0 .. n).into_par_iter().zip(l.into_par_iter())

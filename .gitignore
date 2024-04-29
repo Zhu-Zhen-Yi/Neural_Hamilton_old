@@ -2,4 +2,9 @@
 data/
 notebook/wandb/
 *.pth
+*.pt
 *.parquet
+NeuralHamilton/
+wandb/
+*.db
+__pycache__/
