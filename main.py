@@ -45,14 +45,14 @@ def objective(trial, console, progress, task_id):
 
     hparams = {
         "num_input": 100,
-        "num_branch": trial.suggest_int("num_branch", 1, 9) * 10,
+        "num_branch": trial.suggest_int("num_branch", 1, 4) * 10,
         "num_output": 100,
         "dim_output": 1,
-        "hidden_size": 2 ** trial.suggest_int("hidden_size", 5, 9),
+        "hidden_size": 2 ** trial.suggest_int("hidden_size", 5, 7),
         "branch_hidden_depth": trial.suggest_int("branch_hidden_depth", 2, 10),
         "trunk_hidden_depth": trial.suggest_int("trunk_hidden_depth", 2, 10),
-        "learning_rate": trial.suggest_float("learning_rate", 1e-4, 1e-2, log=True),
-        "batch_size": 500,
+        "learning_rate": trial.suggest_float("learning_rate", 1e-3, 5e-2, log=True),
+        "batch_size": 5000,
         "epochs": 200,
     }
 
@@ -70,7 +70,7 @@ def objective(trial, console, progress, task_id):
         os.makedirs(checkpoint_dir)
 
     try:
-        run = wandb.init(project="NeuralHamilton-Optuna", config=hparams, reinit=False)
+        run = wandb.init(project="NeuralHamilton-GRF-Optuna", config=hparams, reinit=False)
         progress_epoch = progress.add_task("[cyan]Epochs", total=hparams["epochs"])
         for epoch in range(hparams["epochs"]):
             train_loss = train_epoch(model, optimizer, dl_train, device)
@@ -108,7 +108,7 @@ def main():
         task_id = progress.add_task("[green]Optuna trials", total=args.n_trials)
 
         study = optuna.create_study(
-            study_name="NeuralHamilton",
+            study_name="NeuralHamilton-GRF",
             storage="sqlite:///NeuralHamilton.db",
             sampler=sampler,
             pruner=pruner,
