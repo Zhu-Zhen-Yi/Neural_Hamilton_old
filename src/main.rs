@@ -34,9 +34,9 @@ impl Dataset {
     #[allow(non_snake_case)]
     pub fn generate(n: usize, f_train: f64) -> Result<Self> {
         // Generate GRF
-        let b = 8;  // # bases
+        let b = 5;  // # bases
         let m = 100; // # sensors
-        let u_l = Uniform(0.1, 0.25);
+        let u_l = Uniform(0.05, 0.5);
         let l = u_l.sample(n);
 
         let grf_vec = (0 .. n).into_par_iter().zip(l.into_par_iter())
