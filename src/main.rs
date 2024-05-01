@@ -36,7 +36,7 @@ impl Dataset {
         // Generate GRF
         let b = 5;  // # bases
         let m = 100; // # sensors
-        let u_l = Uniform(0.05, 0.5);
+        let u_l = Uniform(0.1, 0.4);
         let l = u_l.sample(n);
 
         let grf_vec = (0 .. n).into_par_iter().zip(l.into_par_iter())
@@ -63,6 +63,18 @@ impl Dataset {
                 grf.fmap(|x| (x - grf_min) / (grf_max - grf_min))
             }).collect::<Vec<_>>();
 
+        let mut stdrng = stdrng_from_seed(42);
+        let mut x_dist_vec = vec![vec![0f64; n]];
+        let b_step = 1f64 / (b as f64);
+        for i in 0 .. b {
+            let u = Uniform(b_step * (i as f64), b_step * ((i + 1) as f64));
+            let x_dist = u.sample_with_rng(&mut stdrng, n);
+            x_dist_vec.push(x_dist);
+        }
+        x_dist_vec.push(vec![1f64; n]);
+        let x_dist = matrix(x_dist_vec.into_iter().flatten().collect(), n, b+2, Col);
+        let x_vec = x_dist.change_shape().to_vec();
+
         let potential_vec = grf_scaled_vec.into_par_iter()
             .map(|grf| {
                 let mut potential = grf.fmap(|x| 2f64 - 4f64 * x);
@@ -73,8 +85,9 @@ impl Dataset {
             .collect::<Vec<_>>();
 
         let (y_vec, Gu_vec): (Vec<Vec<f64>>, Vec<Vec<f64>>) = potential_vec.par_iter()
+            .zip(x_vec.par_iter())
             .progress_with(ProgressBar::new(n as u64))
-            .map(|potential| solve_grf_ode(potential).unwrap())
+            .map(|(potential, x)| solve_grf_ode(potential, x).unwrap())
             .unzip();
 
         // Filter odd data
@@ -85,16 +98,17 @@ impl Dataset {
            }
            ics.push(i);
         }
+        let x_vec = ics.iter().map(|i| x_vec[*i].clone()).collect::<Vec<_>>();
         let potential_vec = ics.iter().map(|i| potential_vec[*i].clone()).collect::<Vec<_>>();
         let y_vec = ics.iter().map(|i| y_vec[*i].clone()).collect::<Vec<_>>();
         let Gu_vec = ics.iter().map(|i| Gu_vec[*i].clone()).collect::<Vec<_>>();
         
-        let x_vec = linspace(0, 1, m);
+        let sensors = linspace(0, 1, m);
         let u_vec = potential_vec.par_iter()
-            .map(|potential| {
-                let x_temp = linspace(0, 1, potential.len());
-                let cs = cubic_hermite_spline(&x_temp, potential, Quadratic)?;
-                Ok(cs.eval_vec(&x_vec))
+            .zip(x_vec.par_iter())
+            .map(|(potential, x)| {
+                let cs = cubic_hermite_spline(x, potential, Quadratic)?;
+                Ok(cs.eval_vec(&sensors))
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -178,9 +192,8 @@ pub struct GRFODE {
 }
 
 impl GRFODE {
-    pub fn new(potential: &[f64]) -> anyhow::Result<Self> {
-        let x = linspace(0, 1, potential.len());
-        let cs = cubic_hermite_spline(&x, potential, Quadratic)?;
+    pub fn new(potential: &[f64], x: &[f64]) -> anyhow::Result<Self> {
+        let cs = cubic_hermite_spline(x, potential, Quadratic)?;
         let cs_deriv = cs.derivative();
         Ok(Self { cs, cs_deriv })
     }
@@ -198,8 +211,8 @@ impl ODEProblem for GRFODE {
     }
 }
 
-pub fn solve_grf_ode(potential: &[f64]) -> anyhow::Result<(Vec<f64>, Vec<f64>)> {
-    let grf_ode = GRFODE::new(potential)?;
+pub fn solve_grf_ode(potential: &[f64], x: &[f64]) -> anyhow::Result<(Vec<f64>, Vec<f64>)> {
+    let grf_ode = GRFODE::new(potential, x)?;
     let solver = BasicODESolver::new(RK4);
     let (t_vec, xp_vec) = solver.solve(&grf_ode, (0f64, 2f64), 1e-3)?;
     let (x_vec, _): (Vec<f64>, Vec<f64>) = xp_vec.into_iter().map(|xp| (xp[0], xp[1])).unzip();
