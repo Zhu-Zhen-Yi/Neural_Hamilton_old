@@ -217,10 +217,11 @@ pub fn solve_grf_ode(potential: &[f64], x: &[f64]) -> anyhow::Result<(Vec<f64>, 
     let (t_vec, xp_vec) = solver.solve(&grf_ode, (0f64, 2f64), 1e-3)?;
     let (x_vec, _): (Vec<f64>, Vec<f64>) = xp_vec.into_iter().map(|xp| (xp[0], xp[1])).unzip();
 
-    // Chebyshev nodes
+    // Uniform nodes
     let n = 100;
     let cs = cubic_hermite_spline(&t_vec, &x_vec, Quadratic)?;
-    let t_vec = chebyshev_nodes(n, 0f64, 2f64);
+    // let t_vec = chebyshev_nodes(n, 0f64, 2f64);
+    let t_vec = linspace(0, 2, n);
     let x_vec = cs.eval_vec(&t_vec);
 
     Ok((t_vec, x_vec))
