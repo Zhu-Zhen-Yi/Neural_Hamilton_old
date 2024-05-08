@@ -57,10 +57,10 @@ def objective(trial, console, progress, task_id):
     hparams = {
         "hidden_size": 86,
         "num_layers": 4,
-        "learning_rate": trial.suggest_float("learning_rate", 1e-3, 5e-2, log=True),
+        "learning_rate": trial.suggest_float("learning_rate", 1e-3, 1e-2, log=True),
         "batch_size": 1000,
         "epochs": 500,
-        "dropout": 0.1,
+        "dropout": trial.suggest_float("dropout", 0.0, 0.5, step=0.1),
         "latent_size": 14,
         "kl_weight": trial.suggest_float("kl_weight", 1e-3, 1e-2, log=True),
     }
@@ -132,7 +132,7 @@ def main():
 
         study = optuna.create_study(
             study_name="NeuralHamilton-VAE(500)",
-            storage="sqlite:///NeuralHamilton.db",
+            storage="sqlite:///NeuralHamilton2.db",
             sampler=sampler,
             pruner=pruner,
             direction="minimize",
