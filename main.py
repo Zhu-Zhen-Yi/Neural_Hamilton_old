@@ -3,7 +3,6 @@ import optuna
 from optuna.samplers import TPESampler
 from optuna.pruners import MedianPruner
 from optuna.storages import RetryFailedTrialCallback
-from optuna.visualization import plot_optimization_history, plot_param_importances
 
 # PyTorch for deep learning
 import torch
@@ -56,13 +55,13 @@ def objective(trial, console, progress, task_id):
     #     "epochs": 200,
     # }
     hparams = {
-        "hidden_size": trial.suggest_int("hidden_size", 10, 80),
-        "num_layers": trial.suggest_int("num_layers", 1, 3),
+        "hidden_size": trial.suggest_int("hidden_size", 10, 100),
+        "num_layers": trial.suggest_int("num_layers", 2, 4),
         "learning_rate": trial.suggest_float("learning_rate", 1e-3, 5e-2, log=True),
-        "batch_size": 2000,
+        "batch_size": 1000,
         "epochs": 100,
         "dropout": 0.1,
-        "latent_size": trial.suggest_int("latent_size", 10, 80),
+        "latent_size": trial.suggest_int("latent_size", 10, 50),
         "kl_weight": trial.suggest_float("kl_weight", 1e-3, 1e+0, log=True),
     }
 
@@ -88,6 +87,9 @@ def objective(trial, console, progress, task_id):
             val_loss, val_kl_loss = evaluate(model, dl_val, device)
             scheduler.step()
             progress.update(progress_epoch, advance=1)
+
+            trial.report(val_loss, epoch)
+
             wandb.log({
                 "train_loss": train_loss,
                 "train_kl_loss": train_kl_loss,
