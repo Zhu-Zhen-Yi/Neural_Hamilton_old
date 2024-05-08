@@ -55,14 +55,14 @@ def objective(trial, console, progress, task_id):
     #     "epochs": 200,
     # }
     hparams = {
-        "hidden_size": trial.suggest_int("hidden_size", 10, 100),
-        "num_layers": trial.suggest_int("num_layers", 2, 4),
+        "hidden_size": 86,
+        "num_layers": 4,
         "learning_rate": trial.suggest_float("learning_rate", 1e-3, 5e-2, log=True),
         "batch_size": 1000,
-        "epochs": 100,
+        "epochs": 500,
         "dropout": 0.1,
-        "latent_size": trial.suggest_int("latent_size", 10, 50),
-        "kl_weight": trial.suggest_float("kl_weight", 1e-3, 1e+0, log=True),
+        "latent_size": 14,
+        "kl_weight": trial.suggest_float("kl_weight", 1e-3, 1e-2, log=True),
     }
 
     dl_train = DataLoader(ds_train, batch_size=hparams["batch_size"], shuffle=True)
@@ -80,7 +80,7 @@ def objective(trial, console, progress, task_id):
         os.makedirs(checkpoint_dir)
 
     try:
-        run = wandb.init(project="NeuralHamilton-VAE-Optuna", config=hparams, reinit=False)
+        run = wandb.init(project="NeuralHamilton-VAE(500)", config=hparams, reinit=False)
         progress_epoch = progress.add_task("[cyan]Epochs", total=hparams["epochs"])
         for epoch in range(hparams["epochs"]):
             train_loss, train_kl_loss = train_epoch(model, optimizer, dl_train, device)
@@ -101,9 +101,12 @@ def objective(trial, console, progress, task_id):
 
             if trial.should_prune():
                 raise optuna.TrialPruned()
+            
+        progress.remove_task(progress_epoch)
         progress.update(task_id, advance=1)
     except optuna.TrialPruned:
         run.finish(exit_code=255)
+        progress.remove_task(progress_epoch)
         progress.update(task_id, advance=1)
         raise
 
@@ -128,7 +131,7 @@ def main():
         task_id = progress.add_task("[green]Optuna trials", total=args.n_trials)
 
         study = optuna.create_study(
-            study_name="NeuralHamilton-VAE",
+            study_name="NeuralHamilton-VAE(500)",
             storage="sqlite:///NeuralHamilton.db",
             sampler=sampler,
             pruner=pruner,
