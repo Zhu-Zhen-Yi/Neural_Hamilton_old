@@ -99,3 +99,77 @@ class VAONet(nn.Module):
         h_c = (hzp, c0)
         o = self.trunk_net(y, h_c)              # B, W2, 1
         return o.squeeze(-1), mu, logvar
+    
+class TFEncoder(nn.Module):
+    def __init__(self, d_model, nhead, num_layers, dim_feedforward, dropout=0.1):
+        super().__init__()
+        self.embedding = nn.Linear(1, d_model)
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead, dim_feedforward=dim_feedforward, dropout=dropout, batch_first=True)
+        self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers)
+
+    def forward(self, x):
+        """
+        - x: (B, W1, 1)
+        - x (after embedding): (B, W1, d_model)
+        - out: (B, W1, d_model)
+        """
+        x = self.embedding(x)
+        out = self.transformer_encoder(x)
+        return out
+
+class TFDecoder(nn.Module):
+    def __init__(self, d_model, nhead, num_layers, dim_feedforward, dropout=0.1):
+        super().__init__()
+        self.embedding = nn.Linear(1, d_model)
+        self.decoder_layer = nn.TransformerDecoderLayer(d_model=d_model, nhead=nhead, dim_feedforward=dim_feedforward, dropout=dropout, batch_first=True)
+        self.transformer_decoder = nn.TransformerDecoder(self.decoder_layer, num_layers)
+        self.fc = nn.Linear(d_model, 1)
+
+    def forward(self, x, memory):
+        """
+        - x: (B, W2, 1)
+        - x (after embedding): (B, W2, d_model)
+        - memory: (B, W1, d_model)
+        - out: (B, W2, d_model)
+        - out (after fc): (B, W2, 1)
+        - out (after squeeze): (B, W2)
+        """
+        x = self.embedding(x)
+        out = self.transformer_decoder(x, memory)
+        out = self.fc(out)
+        out = out.squeeze(-1)
+        return out
+
+class TFONet(nn.Module):
+    def __init__(self, hparams):
+        super().__init__()
+
+        d_model = hparams["d_model"]
+        nhead = hparams["nhead"]
+        num_layers = hparams["num_layers"]
+        dim_feedforward = hparams["dim_feedforward"]
+        dropout = hparams["dropout"]
+
+        self.branch_net = TFEncoder(d_model, nhead, num_layers, dim_feedforward, dropout)
+        self.trunk_net = TFDecoder(d_model, nhead, num_layers, dim_feedforward, dropout)
+
+    def forward(self, u, y):
+        """
+        - u: (B, W1)
+        - y: (B, W2)
+        - u (after reshape): (B, W1, 1)
+        - y (after reshape): (B, W2, 1)
+        - memory: (B, W1, d_model)
+        - o: (B, W2)
+        """
+        B, W1 = u.shape
+        _, W2 = y.shape
+        u = u.view(B, W1, 1)
+        y = y.view(B, W2, 1)
+
+        # Encoding
+        memory = self.branch_net(u)
+
+        # Decoding
+        o = self.trunk_net(y, memory)
+        return o
