@@ -131,7 +131,7 @@ def main():
 
     # Optimizer and scheduler
     #optimizer = Adam(model.parameters(), lr=hparams["learning_rate"])
-    optimizer = AdamW(model.parameters(), lr=hparams["learning_rate"])
+    optimizer = AdamW(model.parameters(), betas=(0.9, 0.98), lr=hparams["learning_rate"])
     scheduler = PolynomialLR(optimizer, total_iters=int(hparams["epochs"]), power=2.0)
 
     # Trainer
