@@ -7,8 +7,7 @@ from torch.utils.data import DataLoader
 
 # Neural Hamilton modules
 from neural_hamilton.model import DeepONet, VAONet
-from neural_hamilton.data import train_dataset, val_dataset
-from neural_hamilton.train import train_epoch, evaluate
+from neural_hamilton.data import val_dataset
 from neural_hamilton.utils import VAEPredictor
 
 # Plotly for visualization
@@ -23,7 +22,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
 # Load the best study
-study = optuna.load_study(study_name="NeuralHamilton-VAE", storage="sqlite:///NeuralHamilton.db")
+study = optuna.load_study(study_name="NeuralHamilton-VAE(500)", storage="sqlite:///NeuralHamilton2.db")
 best_trial = study.best_trial
 checkpoint = best_trial.user_attrs["checkpoint"]
 print(f"Best trial: {best_trial.number}")
@@ -33,14 +32,16 @@ print(f"Checkpoint: {checkpoint}")
 
 # Load the best hyperparameters
 hparams = best_trial.params
-hparams["dropout"] = 0.1
+hparams["hidden_size"] = 86
+hparams["num_layers"] = 4
+hparams["latent_size"] = 14
 
 # Load the model
 model = VAONet(hparams)
 model.load_state_dict(torch.load(checkpoint))
 
 # Create the predictor
-predictor = VAEPredictor(model, device=device, study_name = "NeuralHamilton-VAE", run_name = f"{best_trial.number}")
+predictor = VAEPredictor(model, device=device, study_name = "NeuralHamilton-VAE(500)", run_name = f"{best_trial.number}")
 
 # ==============================================================================
 # Validation dataset
