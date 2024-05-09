@@ -6,7 +6,7 @@ use indicatif::{ProgressBar, ParallelProgressIterator};
 
 #[allow(non_snake_case)]
 fn main() -> std::result::Result<(), Box<dyn Error>> {
-    let n = 100000usize;
+    let n = 100_0000usize;
 
     println!("Generate dataset...");
     let ds = Dataset::generate(n, 0.8)?;
