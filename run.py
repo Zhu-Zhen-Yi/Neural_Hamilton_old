@@ -19,7 +19,7 @@ from neural_hamilton.train import Trainer, VAETrainer
 
 import survey
 import os
-
+import json
 
 # Interactive input for defining hyperparameters and model
 def define_model():
@@ -148,6 +148,10 @@ def main():
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir)
     torch.save(model.state_dict(), f"{checkpoint_dir}/model.pth")
+
+    # Save hparams
+    with open(f"{checkpoint_dir}/hparams.json", "w") as f:
+        json.dump(hparams, f)
 
 if __name__ == "__main__":
     main()

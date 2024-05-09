@@ -8,3 +8,4 @@ NeuralHamilton/
 wandb/
 *.db
 __pycache__/
+checkpoints/

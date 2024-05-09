@@ -1,50 +1,47 @@
+# Optuna for hyperparameter tuning
+import optuna
+from optuna.visualization import plot_optimization_history, plot_param_importances
+
 import torch
 from torch.utils.data import DataLoader
 
 # Neural Hamilton modules
-from neural_hamilton.model import DeepONet, VAONet, TFONet
+from neural_hamilton.model import DeepONet, VAONet
 from neural_hamilton.data import val_dataset
-from neural_hamilton.utils import VAEPredictor, Predictor
+from neural_hamilton.utils import VAEPredictor
+
+# Plotly for visualization
+from plotly.offline import plot
+import plotly.graph_objects as go
 
 import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
 
-import os
-import survey
-import json
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
-# Choose checkpoint
-checkpoints = os.listdir("checkpoints")
-chosen = survey.routines.select("Select checkpoint", options=checkpoints)
-checkpoint = f"checkpoints/{checkpoints[chosen]}"
+# Load the best study
+study = optuna.load_study(study_name="NeuralHamilton-VAE(500)", storage="sqlite:///NeuralHamilton2.db")
+best_trial = study.best_trial
+checkpoint = best_trial.user_attrs["checkpoint"]
+print(f"Best trial: {best_trial.number}")
+print(f"Best value: {best_trial.value}")
+print(f"Best parameters: {best_trial.params}")
+print(f"Checkpoint: {checkpoint}")
 
-# Load the hyperparameters
-hparams = json.load(open(f"{checkpoint}/hparams.json", "r"))
+# Load the best hyperparameters
+hparams = best_trial.params
+hparams["hidden_size"] = 86
+hparams["num_layers"] = 4
+hparams["latent_size"] = 14
 
 # Load the model
-## Check if checkpoint contains 'tf' or 'vae'
-if "tf" in checkpoint:
-    model = TFONet(hparams)
-    model.load_state_dict(torch.load(f"{checkpoint}/model.pth"))
-    predictor = Predictor(
-        model,
-        device=device,
-        study_name = "DeepONet-Hamilton-Bound",
-        run_name = checkpoints[chosen]
-    )
-elif "vae" in checkpoint:
-    model = VAONet(hparams)
-    model.load_state_dict(torch.load(f"{checkpoint}/model.pth"))
-    predictor = VAEPredictor(
-        model,
-        device=device,
-        study_name = "DeepONet-Hamilton-Bound",
-        run_name = checkpoints[chosen]
-    )
+model = VAONet(hparams)
+model.load_state_dict(torch.load(checkpoint))
+
+# Create the predictor
+predictor = VAEPredictor(model, device=device, study_name = "NeuralHamilton-VAE(500)", run_name = f"{best_trial.number}")
 
 # ==============================================================================
 # Validation dataset
