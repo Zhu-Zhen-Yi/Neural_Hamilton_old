@@ -30,8 +30,8 @@ def define_model():
     if model_type == 2:
         d_model         = survey.routines.numeric("Enter d_model (e.g. 32)", decimal=False)
         nhead           = survey.routines.numeric("Enter nhead (e.g. 8)", decimal=False)
-        num_layers      = survey.routines.numeric("Enter num_layers (e.g. 4)", decimal=False)
         dim_feedforward = survey.routines.numeric("Enter dim_feedforward (e.g. 128)", decimal=False)
+        num_layers      = survey.routines.numeric("Enter num_layers (e.g. 4)", decimal=False)
         dropout         = survey.routines.numeric("Enter dropout (e.g. 0.1)")
         learning_rate   = survey.routines.numeric("Enter learning_rate (e.g. 1e-2)")
         batch_size      = survey.routines.numeric("Enter batch_size (e.g. 1000)",decimal=False)
