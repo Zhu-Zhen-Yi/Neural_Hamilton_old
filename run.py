@@ -1,6 +1,6 @@
 # PyTorch for deep learning
 import torch
-from torch.optim import Adam
+from torch.optim import Adam, AdamW
 from torch.optim.lr_scheduler import PolynomialLR
 from torch.utils.data import DataLoader
 import lightning as L
@@ -130,7 +130,8 @@ def main():
     model.to(device)
 
     # Optimizer and scheduler
-    optimizer = Adam(model.parameters(), lr=hparams["learning_rate"])
+    #optimizer = Adam(model.parameters(), lr=hparams["learning_rate"])
+    optimizer = AdamW(model.parameters(), lr=hparams["learning_rate"])
     scheduler = PolynomialLR(optimizer, total_iters=int(hparams["epochs"]), power=2.0)
 
     # Trainer
