@@ -15,7 +15,7 @@ from rich.progress import Progress
 # Neural Hamilton modules
 from neural_hamilton.model import DeepONet, VAONet, TFONet
 from neural_hamilton.data import train_dataset, val_dataset
-from neural_hamilton.train import Trainer
+from neural_hamilton.train import Trainer, VAETrainer
 
 import survey
 import os
@@ -94,14 +94,14 @@ def define_model():
         }
         model = DeepONet(hparams)
         run_name = f"mlp_{hidden_size}_{num_branch}"
-    return model, hparams, run_name
+    return model, hparams, run_name, model_type
 
 def main():
     L.seed_everything(42)
     progress = Progress()
 
     # Define model
-    model, hparams, run_name = define_model()
+    model, hparams, run_name, model_type = define_model()
 
     # Load dataset
     ds_train = train_dataset()
@@ -130,7 +130,7 @@ def main():
     scheduler = PolynomialLR(optimizer, total_iters=int(hparams["epochs"]), power=2.0)
 
     # Trainer
-    trainer = Trainer(model, optimizer, scheduler, device)
+    trainer = VAETrainer(model, optimizer, scheduler, device) if model_type == 1 else Trainer(model, optimizer, scheduler, device)
     wandb.init(project="DeepONet-Hamilton-Bound", config=hparams, name=run_name)
     
     # Train model

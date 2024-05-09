@@ -54,9 +54,10 @@ class Trainer:
             
     
 class VAETrainer:
-    def __init__(self, model, optimizer, device="cpu"):
+    def __init__(self, model, optimizer, scheduler, device="cpu"):
         self.model = model
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.device = device
 
     def step(self, u, y):
@@ -115,6 +116,7 @@ class VAETrainer:
         for epoch in range(epochs):
             train_loss, train_kl_loss = self.train_epoch(dataloader)
             val_loss, val_kl_loss = self.evaluate(dataloader)
+            self.scheduler.step()
             progress.update(progress_epoch, advance=1)
             wandb.log({
                 "train_loss": train_loss,
