@@ -123,7 +123,8 @@ class VAETrainer:
                 "train_kl_loss": train_kl_loss,
                 "val_loss": val_loss,
                 "val_kl_loss": val_kl_loss,
-                "epoch": epoch+1
+                "epoch": epoch+1,
+                "lr": self.scheduler.get_last_lr()[0]
             })
         progress.remove_task(progress_epoch)
 
