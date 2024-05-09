@@ -104,10 +104,14 @@ def main():
     model, hparams, run_name, model_type = define_model()
 
     # Load dataset
-    ds_train = train_dataset()
-    ds_val = val_dataset()
+    options = ["more", "much"]
+    more_or_much = survey.routines.select("Do you want more or much?", options=["more", "much"])
+    more_or_much = options[more_or_much]
+    ds_train = train_dataset(more_or_much)
+    ds_val = val_dataset(more_or_much)
     dl_train = DataLoader(ds_train, batch_size=hparams["batch_size"], shuffle=True)
     dl_val = DataLoader(ds_val, batch_size=hparams["batch_size"], shuffle=False)
+    run_name = f"{run_name}_{more_or_much}"
 
     # Device
     device_count = torch.cuda.device_count()
