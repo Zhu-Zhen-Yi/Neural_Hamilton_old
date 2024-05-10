@@ -36,6 +36,7 @@ def define_model():
         learning_rate   = survey.routines.numeric("Enter learning_rate (e.g. 1e-2)")
         batch_size      = survey.routines.numeric("Enter batch_size (e.g. 1000)",decimal=False)
         epochs          = survey.routines.numeric("Enter epochs (e.g. 100)", decimal=False)
+        power           = survey.routines.numeric("Enter power (e.g. 2.0)")
         hparams = {
             "d_model": d_model,
             "nhead": nhead,
@@ -44,28 +45,31 @@ def define_model():
             "dropout": dropout,
             "learning_rate": learning_rate,
             "batch_size": batch_size,
-            "epochs": epochs
+            "epochs": epochs,
+            "power": power
         }
         model = TFONet(hparams)
         run_name = f"tf_{d_model}_{nhead}_{dim_feedforward}_{num_layers}"
     elif model_type == 1:
         hidden_size     = survey.routines.numeric("Enter hidden_size (e.g. 64)", decimal=False)
         num_layers      = survey.routines.numeric("Enter num_layers (e.g. 4)", decimal=False)
+        latent_size     = survey.routines.numeric("Enter latent_size (e.g. 10)", decimal=False)
+        dropout         = survey.routines.numeric("Enter dropout (e.g. 0.1)")
         learning_rate   = survey.routines.numeric("Enter learning_rate (e.g. 1e-2)")
+        kl_weight       = survey.routines.numeric("Enter kl_weight (e.g. 1e-3)")
         batch_size      = survey.routines.numeric("Enter batch_size (e.g. 1000)", decimal=False)
         epochs          = survey.routines.numeric("Enter epochs (e.g. 100)", decimal=False)
-        dropout         = survey.routines.numeric("Enter dropout (e.g. 0.1)")
-        latent_size     = survey.routines.numeric("Enter latent_size (e.g. 10)", decimal=False)
-        kl_weight       = survey.routines.numeric("Enter kl_weight (e.g. 1e-3)")
+        power           = survey.routines.numeric("Enter power (e.g. 2.0)")
         hparams = {
             "hidden_size": hidden_size,
             "num_layers": num_layers,
+            "latent_size": latent_size,
+            "dropout": dropout,
             "learning_rate": learning_rate,
+            "kl_weight": kl_weight,
             "batch_size": batch_size,
             "epochs": epochs,
-            "dropout": dropout,
-            "latent_size": latent_size,
-            "kl_weight": kl_weight
+            "power": power
         }
         model = VAONet(hparams)
         run_name = f"vae_{hidden_size}_{num_layers}_{latent_size}"
@@ -80,6 +84,7 @@ def define_model():
         learning_rate       = survey.routines.numeric("Enter learning_rate (e.g. 1e-2)")
         batch_size          = survey.routines.numeric("Enter batch_size (e.g. 1000)", decimal=False)
         epochs              = survey.routines.numeric("Enter epochs (e.g. 500)", decimal=False)
+        power               = survey.routines.numeric("Enter power (e.g. 2.0)")
         hparams = {
             "num_input": num_input,
             "num_branch": num_branch,
@@ -90,7 +95,8 @@ def define_model():
             "trunk_hidden_depth": trunk_hidden_depth,
             "learning_rate": learning_rate,
             "batch_size": batch_size,
-            "epochs": epochs
+            "epochs": epochs,
+            "power": power
         }
         model = DeepONet(hparams)
         run_name = f"mlp_{hidden_size}_{num_branch}"
@@ -132,7 +138,7 @@ def main():
     # Optimizer and scheduler
     #optimizer = Adam(model.parameters(), lr=hparams["learning_rate"])
     optimizer = AdamW(model.parameters(), betas=(0.9, 0.98), lr=hparams["learning_rate"])
-    scheduler = PolynomialLR(optimizer, total_iters=int(hparams["epochs"]), power=2.0)
+    scheduler = PolynomialLR(optimizer, total_iters=int(hparams["epochs"]), power=hparams["power"])
 
     # Trainer
     trainer = VAETrainer(model, optimizer, scheduler, device) if model_type == 1 else Trainer(model, optimizer, scheduler, device)
